@@ -1,0 +1,15 @@
+{
+  "payload": {
+    "title": "Kiki"
+  },
+  "ai_tasks": [
+    {
+      "target_path": "ai.generated_intro",
+      "prompt": "Buatkan satu paragraf singkat berbahasa Indonesia yang ramah dan profesional untuk menyapa {{ title }}. Maksimal 2 kalimat."
+    }
+  ],
+  "auto_ai_for_prefix": false,
+  "ai_prefix": "ai.",
+  "output_filename": "hasil-ai-kiki.docx",
+  "temperature": 0.3
+}

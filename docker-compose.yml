@@ -1,0 +1,10 @@
+services:
+  api:
+    build:
+      context: .
+    container_name: contract-gen-api
+    ports:
+      - "8293:8293"
+    env_file:
+      - .env
+    restart: unless-stopped
