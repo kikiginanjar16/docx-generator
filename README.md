@@ -180,6 +180,35 @@ curl -X POST http://localhost:8293/template/analyze-upload \
   -F "template_file=@/path/to/template.docx"
 ```
 
+Response example:
+
+```json
+{
+  "variables": [
+    "title",
+    "ai.generated_intro"
+  ],
+  "suggested_request": {
+    "payload": {
+      "title": "Kiki"
+    },
+    "ai_tasks": [
+      {
+        "target_path": "ai.generated_intro",
+        "prompt": "Buatkan satu paragraf singkat berbahasa Indonesia yang ramah dan profesional untuk menyapa {{ title }}. Maksimal 2 kalimat.",
+        "max_chars": 4000
+      }
+    ],
+    "auto_ai_for_prefix": false,
+    "ai_prefix": "ai.",
+    "output_filename": "template.docx",
+    "temperature": 0.3
+  }
+}
+```
+
+For uploaded templates, the service now also attempts to generate a ready-to-use dummy request via OpenAI based on detected placeholders. If AI generation fails, a local fallback draft is returned.
+
 ### Generate DOCX
 
 `POST /generate-docx`

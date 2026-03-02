@@ -3,7 +3,8 @@ import importlib.util
 import json
 import logging
 import os
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+import re
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
@@ -18,7 +19,7 @@ from .models import (
 )
 from .docx import download_template, render_docx, extract_template_variables
 from .utils import set_by_path, get_by_path, simple_interpolate, safe_json_excerpt
-from .ai import generate_clause_text
+from .ai import generate_clause_text, generate_request_blueprint
 
 load_dotenv()
 logger = logging.getLogger("contract_gen_api")
@@ -271,6 +272,98 @@ async def _read_uploaded_template(file: UploadFile, *, max_mb: int) -> bytes:
         raise HTTPException(status_code=400, detail=f"Template too large (> {max_mb} MB)")
     return content
 
+def _default_dummy_value(path: str):
+    leaf = path.split(".")[-1].lower()
+    if leaf in {"title", "name", "nama"}:
+        return "Kiki"
+    if "email" in leaf:
+        return "kiki@example.com"
+    if "phone" in leaf or "telp" in leaf or "hp" in leaf:
+        return "081234567890"
+    if "date" in leaf or "tanggal" in leaf:
+        return "1 Maret 2026"
+    if "city" in leaf or "kota" in leaf:
+        return "Jakarta"
+    if "address" in leaf or "alamat" in leaf:
+        return "Jl. Contoh No. 1"
+    if "number" in leaf or leaf in {"no", "nomor"}:
+        return "001"
+    if "company" in leaf or "perusahaan" in leaf:
+        return "PT Contoh Indonesia"
+    if "amount" in leaf or "harga" in leaf or "total" in leaf:
+        return "1000000"
+    return leaf.replace("_", " ").replace("-", " ").title() or "Contoh"
+
+def _default_ai_prompt(target_path: str, payload_fields: list[str]) -> str:
+    short_name = target_path.split(".", 1)[1] if "." in target_path else target_path
+    short_lower = short_name.lower()
+    ref = payload_fields[0] if payload_fields else None
+    if ref and any(token in short_lower for token in ("intro", "greeting", "sapaan", "sambutan")):
+        return (
+            "Buatkan satu paragraf singkat berbahasa Indonesia yang ramah dan profesional "
+            f"untuk menyapa {{{{ {ref} }}}}. Maksimal 2 kalimat."
+        )
+
+    references = payload_fields[:2]
+    if references:
+        context_text = ", ".join(f"{{{{ {item} }}}}" for item in references)
+        return (
+            f"Buatkan konten singkat berbahasa Indonesia yang profesional untuk bagian {short_name}. "
+            f"Gunakan konteks {context_text} jika relevan. Maksimal 2 paragraf."
+        )
+    return (
+        f"Buatkan konten singkat berbahasa Indonesia yang profesional untuk bagian {short_name}. "
+        "Maksimal 2 paragraf."
+    )
+
+def _fallback_request_blueprint(*, variables: list[str], output_filename: str, temperature: float) -> GenerateDocxUploadRequest:
+    payload_paths = [name for name in variables if not name.startswith("ai.")]
+    ai_paths = [name for name in variables if name.startswith("ai.")]
+
+    payload: dict = {}
+    for path in payload_paths:
+        set_by_path(payload, path, _default_dummy_value(path))
+
+    ai_tasks = [
+        {
+            "target_path": path,
+            "prompt": _default_ai_prompt(path, payload_paths),
+            "max_chars": 4000,
+        }
+        for path in ai_paths
+    ]
+
+    return GenerateDocxUploadRequest(
+        payload=payload,
+        ai_tasks=ai_tasks,
+        auto_ai_for_prefix=False,
+        ai_prefix="ai.",
+        output_filename=output_filename,
+        temperature=temperature,
+    )
+
+def _suggested_output_filename(original_name: str | None) -> str:
+    base_name = os.path.splitext(original_name or "")[0]
+    cleaned = re.sub(r"[^a-zA-Z0-9_-]+", "-", base_name).strip("-_").lower()
+    stem = cleaned or "generated"
+    return f"{stem}.docx"
+
+def _build_suggested_request(*, variables: list[str], output_filename: str, cfg: dict) -> GenerateDocxUploadRequest:
+    try:
+        draft = generate_request_blueprint(
+            model=cfg["model"],
+            variables=variables,
+            output_filename=output_filename,
+            temperature=0.3,
+        )
+        return GenerateDocxUploadRequest.model_validate(draft)
+    except Exception:
+        return _fallback_request_blueprint(
+            variables=variables,
+            output_filename=output_filename,
+            temperature=0.3,
+        )
+
 @app.post(
     "/template/analyze",
     response_model=TemplateAnalyzeResponse,
@@ -300,7 +393,12 @@ if _HAS_MULTIPART:
         try:
             tpl = await _read_uploaded_template(template_file, max_mb=cfg["max_mb"])
             vars_ = sorted(extract_template_variables(tpl))
-            return TemplateAnalyzeResponse(variables=vars_)
+            suggested_request = _build_suggested_request(
+                variables=vars_,
+                output_filename=_suggested_output_filename(template_file.filename),
+                cfg=cfg,
+            )
+            return TemplateAnalyzeResponse(variables=vars_, suggested_request=suggested_request)
         except HTTPException:
             raise
         except Exception as e:

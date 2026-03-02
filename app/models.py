@@ -15,9 +15,6 @@ class AITask(BaseModel):
 class TemplateAnalyzeRequest(BaseModel):
     template_url: HttpUrl
 
-class TemplateAnalyzeResponse(BaseModel):
-    variables: List[str]
-
 class GenerateDocxRequest(BaseModel):
     template_url: HttpUrl
     payload: Dict[str, Any]
@@ -36,3 +33,7 @@ class GenerateDocxUploadRequest(BaseModel):
     ai_prefix: str = "ai."
     output_filename: str = "generated.docx"
     temperature: float = 0.3
+
+class TemplateAnalyzeResponse(BaseModel):
+    variables: List[str]
+    suggested_request: GenerateDocxUploadRequest | None = None
