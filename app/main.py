@@ -1,11 +1,12 @@
 from __future__ import annotations
 import importlib.util
 import json
+import logging
 import os
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from dotenv import load_dotenv
 from pydantic import ValidationError
 
@@ -20,6 +21,7 @@ from .utils import set_by_path, get_by_path, simple_interpolate, safe_json_excer
 from .ai import generate_clause_text
 
 load_dotenv()
+logger = logging.getLogger("contract_gen_api")
 
 _OPENAPI_TAGS = [
     {
@@ -243,6 +245,14 @@ def custom_swagger_ui():
 @app.get("/healthz", tags=["System"], summary="Health check")
 def healthz():
     return {"ok": True}
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled exception on %s %s", request.method, request.url.path, exc_info=exc)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error. Check server logs for traceback."},
+    )
 
 async def _read_uploaded_template(file: UploadFile, *, max_mb: int) -> bytes:
     filename = (file.filename or "").lower()
