@@ -4,10 +4,10 @@ import json
 import logging
 import os
 import re
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from dotenv import load_dotenv
 from pydantic import ValidationError
 
@@ -417,7 +417,7 @@ def _default_auto_prompt(field: str, context: dict) -> str:
         "Output: plain text saja."
     )
 
-def _generate_docx_response(template_bytes: bytes, req, cfg: dict) -> StreamingResponse:
+def _generate_docx_response(template_bytes: bytes, req, cfg: dict) -> Response:
     # 1) context = payload (dynamic)
     context = dict(req.payload) if isinstance(req.payload, dict) else {}
 
@@ -456,8 +456,8 @@ def _generate_docx_response(template_bytes: bytes, req, cfg: dict) -> StreamingR
         raise HTTPException(status_code=500, detail=f"Render failed: {e}")
 
     filename = req.output_filename or "generated.docx"
-    return StreamingResponse(
-        iter([out_bytes]),
+    return Response(
+        content=out_bytes,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

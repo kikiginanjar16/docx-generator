@@ -26,7 +26,7 @@ Core value proposition:
 - Generate documents from a direct template upload
 - Inject AI-generated clauses into targeted fields via `ai_tasks`
 - Auto-fill missing `ai.*` placeholders when `auto_ai_for_prefix=true`
-- Stream the generated `.docx` file directly to the client
+- Return the generated `.docx` file as a binary buffer
 
 ## Architecture
 
@@ -41,7 +41,7 @@ FastAPI Application (app/main.py)
   |
   |-- Request validation (Pydantic models)
   |-- Endpoint orchestration
-  |-- Error handling / response streaming
+  |-- Error handling / binary response delivery
   |
   +--> Template Retrieval / Parsing (app/docx.py)
   |     |-- Download template from URL
@@ -69,7 +69,7 @@ For document generation, the runtime flow is:
 4. Execute explicit `ai_tasks` if provided.
 5. Optionally auto-generate missing `ai.*` fields.
 6. Render the DOCX template with final context.
-7. Return the generated file as a streamed download.
+7. Return the generated file as a binary download.
 
 ## Project Structure
 
@@ -213,7 +213,7 @@ For uploaded templates, the service now also attempts to generate a ready-to-use
 
 `POST /generate-docx`
 
-This endpoint downloads the template from a URL and returns a streamed `.docx` file.
+This endpoint downloads the template from a URL and returns a `.docx` file as a binary buffer.
 
 Example request:
 
