@@ -240,7 +240,12 @@ def custom_swagger_ui():
         "DOCX Contract Generator",
         1,
     )
-    return HTMLResponse(branded_body, status_code=html.status_code, headers=dict(html.headers))
+    response_headers = {
+        key: value
+        for key, value in html.headers.items()
+        if key.lower() != "content-length"
+    }
+    return HTMLResponse(branded_body, status_code=html.status_code, headers=response_headers)
 
 @app.get("/healthz", tags=["System"], summary="Health check")
 def healthz():
